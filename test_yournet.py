@@ -17,7 +17,7 @@ from eval.metrics import get_accuracy, get_infer_time, get_macs_and_params
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
-    "--best-checkpoint", type=str, default="./checkpoints/YourNet/pruned/7/epoch-11.pth"
+    "--best-checkpoint", type=str, default="./finalModel1.pth"
 )
 
 parser.add_argument("--device", type=str, choices=["cpu", "cuda"], default="cpu")
@@ -60,8 +60,8 @@ if __name__ == "__main__":
             "YourNet",
             accuracy,
             infer_time * 1000,
-            MACs / (1000 ** 2),
             params / (1000 ** 2),
+            MACs / (1000 ** 2),
         )
     )
     print("----------------------------------------------------------------")

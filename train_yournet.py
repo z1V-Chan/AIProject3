@@ -1,7 +1,7 @@
-import argparse
-import os
-import torch
+import os, random
+import torch, numpy as np
 import lnp
+
 
 from torch import nn
 from torchvision import datasets, transforms
@@ -16,6 +16,11 @@ LLR = 0.008
 EPOCH = 15
 DEVICE = "cpu"
 DEFAULTCHECKPOINTDIR = "./checkpoints/YourNet/init/"
+SEED = 1007
+
+random.seed(SEED)
+torch.manual_seed(SEED)
+np.random.seed(SEED)
 
 
 def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
@@ -26,8 +31,8 @@ def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
     optimizer = torch.optim.Adam(model.parameters(), lr=HLR)
     for epoch in range(EPOCH):
         print(f"Epoch {epoch}\n-------------------------------")
-        if epoch > EPOCH // 3:
-            optimizer = torch.optim.SGD(model.parameters(), lr=LLR)
+        if epoch == EPOCH // 3:
+            optimizer = torch.optim.SGD(model.parameters(), lr=LLR, momentum=0.25)
 
         for batch_idx, (X, y) in enumerate(train_loader):
 
@@ -53,6 +58,7 @@ def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
         Accs.append(accuracy)
         checkPoints.append(checkPoint)
     idx = max([i for i in range(len(Accs))], key=lambda x: Accs[x])
+    # print(model)
     return Accs[idx], checkPoints[idx]
 
 

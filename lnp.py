@@ -1,5 +1,4 @@
-from pickle import TRUE
-import torch
+import torch, numpy as np
 import torch_pruning as tp
 
 import argparse
@@ -13,13 +12,11 @@ from models.YourNet import YourNet
 import train_yournet
 
 BATCHSIZE = 64
-LR = 0.01
-EPOCH = 10
-RATE = 0.25
+RATE = 0.1
 DEVICE = "cpu"
-BESTCHECKPOINT = "./checkpoints/YourNet/init/epoch-10.pth"
-CHECKPOINTDIR = "./checkpoints/YourNet/pruned/"
-PKLFILE = "./result.pkl"
+BESTCHECKPOINT = "./checkpoints/YourNet/pruned/10/epoch-11.pth"
+CHECKPOINTDIR = "./checkpoints/YourNet/pruned1/"
+PKLFILE = "./result1.pkl"
 
 STRUCTURE = [
     # "model.conv1",
@@ -27,6 +24,11 @@ STRUCTURE = [
     "model.fc1",
     "model.fc2",
 ]
+SEED = 1007
+
+random.seed(SEED)
+torch.manual_seed(SEED)
+np.random.seed(SEED)
 
 
 def main(bestCheckpoint):
@@ -52,6 +54,7 @@ def main(bestCheckpoint):
 
     for m in STRUCTURE:
         while prune(model, eval(m), test_loader, cnt, bestCheckpoints, accs):
+            print(model)
             cnt += 1
         model = torch.load(bestCheckpoints[-1], map_location=DEVICE)
 
@@ -68,15 +71,18 @@ def main(bestCheckpoint):
     print(
         "| %10s | %8.3f | %14.3f | %9.3f | %7.3f |"
         % (
-            "LeNet-5",
+            "YourNet",
             accuracy,
             infer_time * 1000,
-            MACs / (1000 ** 2),
             params / (1000 ** 2),
+            MACs / (1000 ** 2),
         )
     )
     print("----------------------------------------------------------------")
     print(bestCheckpoints[-1])
+
+    print(model)
+    torch.save(model, "./finalModel1.pth")
 
     with open(PKLFILE, "wb") as f:
         pickle.dump([bestCheckpoints, accs], f)
@@ -96,20 +102,16 @@ def prune(model: YourNet, module, test_loader, cnt, bestCheckpoints: list, accs:
 
     pruning_plan.exec()
 
-    print(model)
-
     checkpointDir = CHECKPOINTDIR + f"{cnt}/"
 
     acc, bestCheckpoint = train_yournet.main(checkpointDir, model)
 
-    if acc > 0.98:  # accs[0]
+    if acc > 0.981:  # accs[0]
         accs.append(acc)
         bestCheckpoints.append(bestCheckpoint)
         return True
     else:
         return False
-
-    # torch.save(model, 'model.pth')
 
 
 if __name__ == "__main__":

@@ -1,26 +1,43 @@
 import os, random
 import torch, numpy as np
-import lnp
-
+import torch_pruning as tp
+import pickle
 
 from torch import nn
 from torchvision import datasets, transforms
 
 from models.YourNet import YourNet
-from eval.metrics import get_accuracy
+from eval.metrics import get_accuracy, get_infer_time, get_macs_and_params
 
 
 BATCHSIZE = 64
-HLR = 0.012
+RATE = 0.09
+HLR = 0.01
 LLR = 0.008
-EPOCH = 15
+EPOCH = 20
 DEVICE = "cpu"
-DEFAULTCHECKPOINTDIR = "./checkpoints/YourNet/init/"
-SEED = 1007
+BASEACC = 0.982
+
+SEED = 2021
 
 random.seed(SEED)
 torch.manual_seed(SEED)
 np.random.seed(SEED)
+
+DEFAULTCHECKPOINTDIR = "./checkpoints/YourNet/init/"
+CHECKPOINTDIR = "./checkpoints/YourNet/pruning/"
+LOGPKLFILE = "./log.pkl"
+FINALMODEL = "./finalModel.pth"
+
+LINEARSTRUCTURE = [
+    "model.fc1",
+    "model.fc2",
+]
+
+CONVSTRUCTURE = [
+    "model.conv1",
+    "model.conv2",
+]
 
 
 def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
@@ -28,14 +45,13 @@ def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
     checkPoints = []
     size = len(train_loader.dataset)
     model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=HLR)
+    optimizer = torch.optim.Adamax(model.parameters(), lr=HLR)
     for epoch in range(EPOCH):
         print(f"Epoch {epoch}\n-------------------------------")
-        if epoch == EPOCH // 3:
-            optimizer = torch.optim.SGD(model.parameters(), lr=LLR, momentum=0.25)
+        if epoch == EPOCH // 2:
+            optimizer = torch.optim.SGD(model.parameters(), lr=LLR, momentum=0.2)
 
         for batch_idx, (X, y) in enumerate(train_loader):
-
             X, y = X.to(DEVICE), y.to(DEVICE)
 
             # Compute prediction error
@@ -102,5 +118,102 @@ def main(checkpointDir: str, model=None, lastCheckpoint: str = None):
     return train(model, train_loader, test_loader, loss_fn, checkpointDir)
 
 
+def prune(
+    model: YourNet, module, type, test_loader, cnt, bestCheckpoints: list, accs: list
+):
+    model = model.eval()
+
+    strategy = tp.strategy.L1Strategy()
+
+    DG = tp.DependencyGraph()
+
+    DG.build_dependency(model, example_inputs=iter(test_loader).next()[0])
+
+    pruning_idxs = strategy(module.weight, amount=RATE)
+    pruning_plan = DG.get_pruning_plan(module, type, idxs=pruning_idxs)
+
+    pruning_plan.exec()
+
+    checkpointDir = CHECKPOINTDIR + f"{cnt}/"
+
+    acc, bestCheckpoint = main(checkpointDir, model)
+
+    if acc >= BASEACC:  # accs[0]
+        accs.append(acc)
+        bestCheckpoints.append(bestCheckpoint)
+        return True
+    else:
+        return False
+
+
+def netPruning(bestCheckpoint):
+    test_loader = torch.utils.data.DataLoader(
+        datasets.MNIST(
+            root="./data",
+            train=False,
+            transform=transforms.Compose(
+                [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+            ),
+        ),
+        batch_size=BATCHSIZE,
+        shuffle=True,
+    )
+
+    model = torch.load(bestCheckpoint, map_location=DEVICE)
+    # print(model)
+
+    cnt = 0
+
+    accs = [get_accuracy(model, test_loader, DEVICE)]
+    bestCheckpoints = [bestCheckpoint]
+
+    for m in CONVSTRUCTURE:
+        while prune(
+            model, eval(m), tp.prune_conv, test_loader, cnt, bestCheckpoints, accs
+        ):
+            print(model)
+            cnt += 1
+        model = torch.load(bestCheckpoints[-1], map_location=DEVICE)
+
+    for m in LINEARSTRUCTURE:
+        while prune(
+            model, eval(m), tp.prune_linear, test_loader, cnt, bestCheckpoints, accs
+        ):
+            print(model)
+            cnt += 1
+        model = torch.load(bestCheckpoints[-1], map_location=DEVICE)
+
+    accuracy = get_accuracy(model, test_loader, DEVICE)
+    infer_time = get_infer_time(model, test_loader, DEVICE)
+    MACs, params = get_macs_and_params(model, DEVICE)
+
+    print("----------------------------------------------------------------")
+    print(
+        "| %10s | %8s | %14s | %9s | %7s |"
+        % ("Model Name", "Accuracy", "Infer Time(ms)", "Params(M)", "MACs(M)")
+    )
+    print("----------------------------------------------------------------")
+    print(
+        "| %10s | %8.3f | %14.3f | %9.3f | %7.3f |"
+        % (
+            "YourNet",
+            accuracy,
+            infer_time * 1000,
+            params / (1000 ** 2),
+            MACs / (1000 ** 2),
+        )
+    )
+    print("----------------------------------------------------------------")
+    print(bestCheckpoints[-1])
+
+    print(model)
+    torch.save(model.state_dict(), FINALMODEL)
+
+    with open(LOGPKLFILE, "wb") as f:
+        pickle.dump([bestCheckpoints, accs], f)
+
+
 if __name__ == "__main__":
-    print(main(DEFAULTCHECKPOINTDIR))
+    acc, bestCheckpoint = main(DEFAULTCHECKPOINTDIR)
+    print(acc, bestCheckpoint)
+    netPruning(bestCheckpoint)

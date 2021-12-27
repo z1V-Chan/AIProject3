@@ -15,14 +15,17 @@ RATE = 0.09
 HLR = 0.01
 LLR = 0.008
 EPOCH = 20
-DEVICE = "cpu"
+DEVICE = "cuda"
 BASEACC = 0.982
 
 SEED = 2021
 
 random.seed(SEED)
-torch.manual_seed(SEED)
 np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
+torch.backends.cudnn.deterministic = True
 
 DEFAULTCHECKPOINTDIR = "./checkpoints/YourNet/init/"
 CHECKPOINTDIR = "./checkpoints/YourNet/pruning/"

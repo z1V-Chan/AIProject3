@@ -2,11 +2,12 @@ import os, random
 import torch, numpy as np
 import torch_pruning as tp
 import pickle
+import torch.nn.functional as F
 
 from torch import nn
 from torchvision import datasets, transforms
+import torch.nn.functional as F
 
-from models.YourNet import YourNet
 from eval.metrics import get_accuracy, get_infer_time, get_macs_and_params
 
 
@@ -16,6 +17,8 @@ EPOCH = 40
 DEVICE = "cuda"
 BASEACC = 0.982
 ITER = 20
+MODELFILE = "./models/YourNet.py"
+FILESTR = "from torch import nn\nimport torch.nn.functional as F\n\n\nclass YourNet(nn.Module):\n    ###################### Begin #########################\n    # You can create your own network here or copy our reference model (LeNet5)\n    # We will conduct a unified test on this network to calculate your score\n\n    def __init__(self):\n        super(YourNet, self).__init__()\n        # 1 input image channel, 6 output channels, 3x3 square conv kernel\n        self.conv1 = nn.Conv2d(1, 3, 3)\n        self.conv2 = nn.Conv2d(3, 4, 3)\n        self.fc1 = nn.Linear(100, {})  # 5x5 image dimension\n        self.fc2 = nn.Linear({}, 10)\n        # self.fc1 = nn.Linear(4 * 5 * 5, 120)  # 5x5 image dimension\n        # self.fc2 = nn.Linear(120, 90)\n        # self.fc3 = nn.Linear(90, 10)\n\n    def forward(self, x):\n        x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))\n        x = F.max_pool2d(F.relu(self.conv2(x)), 2)\n        x = x.view(-1, int(x.nelement() / x.shape[0]))\n        x = F.relu(self.fc1(x))\n        # x = F.relu(self.fc2(x))\n        x = self.fc2(x)\n        # x = self.fc3(x)\n        return x\n\n    ######################  End  #########################\n"
 
 SEED = 2022
 
@@ -24,12 +27,36 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.cuda.manual_seed_all(SEED)
+torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 DEFAULTCHECKPOINTDIR = "./checkpoints/YourNet/init/"
 CHECKPOINTDIR = "./checkpoints/YourNet/pruning/"
 LOGPKLFILE = "./log.pkl"
 FINALMODEL = "./finalModel.pth"
+
+class YourNet(nn.Module):
+
+    def __init__(self):
+        super(YourNet, self).__init__()
+        # 1 input image channel, 6 output channels, 3x3 square conv kernel
+        self.conv1 = nn.Conv2d(1, 3, 3)
+        self.conv2 = nn.Conv2d(3, 4, 3)
+        self.fc1 = nn.Linear(100, 96)  # 5x5 image dimension
+        self.fc2 = nn.Linear(96, 10)
+        # self.fc1 = nn.Linear(4 * 5 * 5, 120)  # 5x5 image dimension
+        # self.fc2 = nn.Linear(120, 90)
+        # self.fc3 = nn.Linear(90, 10)
+
+    def forward(self, x):
+        x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
+        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+        x = x.view(-1, int(x.nelement() / x.shape[0]))
+        x = F.relu(self.fc1(x))
+        # x = F.relu(self.fc2(x))
+        x = self.fc2(x)
+        # x = self.fc3(x)
+        return x
 
 # CONVSTRUCTURE = [
 #     "model.conv1",
@@ -47,14 +74,14 @@ def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
     checkPoints = []
     size = len(train_loader.dataset)
     model.train()
-    optimizer = torch.optim.Adamax(model.parameters(), lr=0.008)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.008)
     for epoch in range(EPOCH):
         print(f"Epoch {epoch}\n-------------------------------")
         if epoch == EPOCH // 4:
             for param_group in optimizer.param_groups:
-                param_group["lr"] = 0.01
+                param_group["lr"] = 0.012
         if epoch == EPOCH // 2:
-            optimizer = torch.optim.SGD(model.parameters(), lr=0.0075, momentum=0.2)
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.008, momentum=0.2)
 
         for batch_idx, (X, y) in enumerate(train_loader):
             X, y = X.to(DEVICE), y.to(DEVICE)
@@ -79,6 +106,7 @@ def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
         Accs.append(accuracy)
         checkPoints.append(checkPoint)
     idx = max([i for i in range(len(Accs))], key=lambda x: Accs[x])
+    print(Accs[idx])
     # print(model)
     return Accs[idx], checkPoints[idx]
 
@@ -221,6 +249,9 @@ def netPruning(bestCheckpoint):
     print("----------------------------------------------------------------")
     print(bestCheckpoints[-1])
 
+    with open(MODELFILE, "w", encoding="utf-8") as f:
+            f.write(FILESTR.format(model.fc1.out_features, model.fc1.out_features))
+
     print(model)
     tmpDict = model.state_dict()
     tmpDict.pop("total_ops")
@@ -233,5 +264,5 @@ def netPruning(bestCheckpoint):
 
 if __name__ == "__main__":
     acc, bestCheckpoint = main(DEFAULTCHECKPOINTDIR)
-    print(acc, bestCheckpoint)
+    print(bestCheckpoint)
     netPruning(bestCheckpoint)

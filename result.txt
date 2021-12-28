@@ -7,7 +7,7 @@ pip install torch_pruning
 ----------------------------------------------------------------
 | Model Name | Accuracy | Infer Time(ms) | Params(M) | MACs(M) |
 ----------------------------------------------------------------
-|    LeNet-5 |    0.980 |          0.040 |     0.206 |   0.060 |
+|    LeNet-5 |    0.980 |          0.042 |     0.206 |   0.060 |
 ----------------------------------------------------------------
 
 # The accuracy, infer time, MACs and params of your model (YourNet)
@@ -15,11 +15,11 @@ pip install torch_pruning
 -------------------------------------------------------------
 |         | Accuracy | Infer Time(ms) | MACs(M) | Params(M) |
 -------------------------------------------------------------
-| YourNet |    0.984 |          0.041 |   0.036 |     0.003 |
+| YourNet |    0.984 |          0.040 |   0.036 |     0.003 |
 -------------------------------------------------------------
-|   Score |    8.000 |         41.168 |   9.331 |    42.362 |
+|   Score |    8.000 |         41.389 |   9.331 |    42.362 |
 -------------------------------------------------------------
-Your score is:  160.86112884160224
+Your score is:  161.08181063332242
 
 # The command to run “./train_yournet.py”
 
@@ -35,3 +35,8 @@ python test_yournet.py --best-checkpoint ./finalModel.pth --device cuda
 command used: 'nohup python train_yournet.py > out.log 2>&1'
 
 ./log.pkl is the performance record file genrated during training 
+
+testing environment: 
+    cpu: i7-12700k
+    gpu: 3080ti 
+    os: ubuntu server 20.04 LTS

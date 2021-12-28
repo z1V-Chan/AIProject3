@@ -2,7 +2,7 @@
 Test YourNet
 
 Example:
-    python test_yournet.py --best-checkpoint ./checkpoints/YourNet/pruning/9/epoch-12.pth
+    python test_yournet.py --best-checkpoint ./finalModel.pth --device cuda
 """
 import argparse
 import torch

@@ -14,9 +14,10 @@ BATCHSIZE = 64
 RATE = 0.09
 HLR = 0.01
 LLR = 0.008
-EPOCH = 20
+EPOCH = 24
 DEVICE = "cuda"
-BASEACC = 0.982
+BASEACC = 0.984
+ITER = 11
 
 SEED = 2021
 
@@ -32,14 +33,14 @@ CHECKPOINTDIR = "./checkpoints/YourNet/pruning/"
 LOGPKLFILE = "./log.pkl"
 FINALMODEL = "./finalModel.pth"
 
+# CONVSTRUCTURE = [
+#     "model.conv1",
+#     "model.conv2",
+# ]
+
 LINEARSTRUCTURE = [
     "model.fc1",
     "model.fc2",
-]
-
-CONVSTRUCTURE = [
-    "model.conv1",
-    "model.conv2",
 ]
 
 
@@ -111,7 +112,9 @@ def main(checkpointDir: str, model=None, lastCheckpoint: str = None):
         model = torch.load(lastCheckpoint, map_location=DEVICE)
 
     elif model is None:
-        model = YourNet().to(device=DEVICE)
+        model = YourNet()
+
+    model = model.to(device=DEVICE)
 
     loss_fn = nn.CrossEntropyLoss()
 
@@ -170,21 +173,28 @@ def netPruning(bestCheckpoint):
     accs = [get_accuracy(model, test_loader, DEVICE)]
     bestCheckpoints = [bestCheckpoint]
 
-    for m in CONVSTRUCTURE:
-        while prune(
-            model, eval(m), tp.prune_conv, test_loader, cnt, bestCheckpoints, accs
-        ):
-            print(model)
-            cnt += 1
-        model = torch.load(bestCheckpoints[-1], map_location=DEVICE)
+    for _ in range(ITER):
+        for m in LINEARSTRUCTURE:
+            if prune(
+                model,
+                eval(m),
+                tp.prune_linear,
+                test_loader,
+                cnt,
+                bestCheckpoints,
+                accs,
+            ):
+                print(model)
+                cnt += 1
+            model = torch.load(bestCheckpoints[-1], map_location=DEVICE)
 
-    for m in LINEARSTRUCTURE:
-        while prune(
-            model, eval(m), tp.prune_linear, test_loader, cnt, bestCheckpoints, accs
-        ):
-            print(model)
-            cnt += 1
-        model = torch.load(bestCheckpoints[-1], map_location=DEVICE)
+    # for m in CONVSTRUCTURE:
+    #     while prune(
+    #         model, eval(m), tp.prune_conv, test_loader, cnt, bestCheckpoints, accs
+    #     ):
+    #         print(model)
+    #         cnt += 1
+    #     model = torch.load(bestCheckpoints[-1], map_location=DEVICE)
 
     accuracy = get_accuracy(model, test_loader, DEVICE)
     infer_time = get_infer_time(model, test_loader, DEVICE)
@@ -202,14 +212,17 @@ def netPruning(bestCheckpoint):
             "YourNet",
             accuracy,
             infer_time * 1000,
-            params / (1000 ** 2),
             MACs / (1000 ** 2),
+            params / (1000 ** 2),
         )
     )
     print("----------------------------------------------------------------")
     print(bestCheckpoints[-1])
 
     print(model)
+    tmpDict = model.state_dict()
+    tmpDict.pop("total_ops")
+    tmpDict.pop("total_params")
     torch.save(model.state_dict(), FINALMODEL)
 
     with open(LOGPKLFILE, "wb") as f:

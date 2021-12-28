@@ -11,15 +11,13 @@ from eval.metrics import get_accuracy, get_infer_time, get_macs_and_params
 
 
 BATCHSIZE = 64
-RATE = 0.09
-HLR = 0.01
-LLR = 0.008
-EPOCH = 24
+RATE = 0.08
+EPOCH = 40
 DEVICE = "cuda"
-BASEACC = 0.984
-ITER = 11
+BASEACC = 0.982
+ITER = 20
 
-SEED = 2021
+SEED = 2022
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -40,7 +38,7 @@ FINALMODEL = "./finalModel.pth"
 
 LINEARSTRUCTURE = [
     "model.fc1",
-    "model.fc2",
+    # "model.fc2",
 ]
 
 
@@ -49,11 +47,14 @@ def train(model, train_loader, test_loader, loss_fn, checkpointDir: str):
     checkPoints = []
     size = len(train_loader.dataset)
     model.train()
-    optimizer = torch.optim.Adamax(model.parameters(), lr=HLR)
+    optimizer = torch.optim.Adamax(model.parameters(), lr=0.008)
     for epoch in range(EPOCH):
         print(f"Epoch {epoch}\n-------------------------------")
+        if epoch == EPOCH // 4:
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = 0.01
         if epoch == EPOCH // 2:
-            optimizer = torch.optim.SGD(model.parameters(), lr=LLR, momentum=0.2)
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.0075, momentum=0.2)
 
         for batch_idx, (X, y) in enumerate(train_loader):
             X, y = X.to(DEVICE), y.to(DEVICE)
@@ -94,6 +95,7 @@ def main(checkpointDir: str, model=None, lastCheckpoint: str = None):
         ),
         batch_size=BATCHSIZE,
         shuffle=True,
+        num_workers=12,
     )
 
     test_loader = torch.utils.data.DataLoader(
@@ -223,7 +225,7 @@ def netPruning(bestCheckpoint):
     tmpDict = model.state_dict()
     tmpDict.pop("total_ops")
     tmpDict.pop("total_params")
-    torch.save(model.state_dict(), FINALMODEL)
+    torch.save(tmpDict, FINALMODEL)
 
     with open(LOGPKLFILE, "wb") as f:
         pickle.dump([bestCheckpoints, accs], f)

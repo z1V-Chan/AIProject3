@@ -2,7 +2,7 @@
 Test LeNet5
 
 Example:
-python test_lenet5.py --best-checkpoint ./checkpoints/LeNet5/epoch-6.pth --device cuda
+python test_lenet5.py --best-checkpoint ./checkpoints/LeNet5/epoch-6.pth --device cpu
 """
 import argparse
 import torch

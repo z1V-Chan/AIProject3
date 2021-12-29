@@ -1,0 +1,1 @@
+python test_yournet.py --best-checkpoint ./finalModel.pth --device cpu

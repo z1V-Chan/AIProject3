@@ -14,7 +14,7 @@ from eval.metrics import get_accuracy, get_infer_time, get_macs_and_params
 BATCHSIZE = 64
 RATE = 0.08
 EPOCH = 40
-DEVICE = "cuda"
+DEVICE = "cpu"
 BASEACC = 0.982
 ITER = 20
 MODELFILE = "./models/YourNet.py"
@@ -25,18 +25,19 @@ SEED = 2022
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
-torch.cuda.manual_seed(SEED)
-torch.cuda.manual_seed_all(SEED)
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
+if DEVICE == "cuda":
+    torch.cuda.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 
 DEFAULTCHECKPOINTDIR = "./checkpoints/YourNet/init/"
 CHECKPOINTDIR = "./checkpoints/YourNet/pruning/"
 LOGPKLFILE = "./log.pkl"
 FINALMODEL = "./finalModel.pth"
 
-class YourNet(nn.Module):
 
+class YourNet(nn.Module):
     def __init__(self):
         super(YourNet, self).__init__()
         # 1 input image channel, 6 output channels, 3x3 square conv kernel
@@ -57,6 +58,7 @@ class YourNet(nn.Module):
         x = self.fc2(x)
         # x = self.fc3(x)
         return x
+
 
 # CONVSTRUCTURE = [
 #     "model.conv1",
@@ -250,7 +252,7 @@ def netPruning(bestCheckpoint):
     print(bestCheckpoints[-1])
 
     with open(MODELFILE, "w", encoding="utf-8") as f:
-            f.write(FILESTR.format(model.fc1.out_features, model.fc1.out_features))
+        f.write(FILESTR.format(model.fc1.out_features, model.fc1.out_features))
 
     print(model)
     tmpDict = model.state_dict()
